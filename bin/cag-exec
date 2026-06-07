@@ -100,7 +100,14 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 # 5. Output structured JSON
-DIFF_STAT=$(git show --shortstat HEAD 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' || echo "no commit")
-[[ -z "$DIFF_STAT" ]] && DIFF_STAT="no commit"
+# diff_stat must agree with CHANGED: only read HEAD when this run produced the
+# commit (HEAD now points at it); otherwise HEAD is the pre-existing worktree
+# commit and its stat is unrelated to this execution.
+if [[ "$CHANGED" == "true" ]]; then
+  DIFF_STAT=$(git show --shortstat HEAD 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//')
+  [[ -z "$DIFF_STAT" ]] && DIFF_STAT="unknown"
+else
+  DIFF_STAT="no changes"
+fi
 printf '{"exit_code":%d,"changed":%s,"diff_stat":"%s","artifact":"%s"}\n' \
   "$EXIT_CODE" "$CHANGED" "$DIFF_STAT" "$ARTIFACT"

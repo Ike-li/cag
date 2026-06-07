@@ -73,7 +73,7 @@ EXEC_PROMPT
 
 RAW="/tmp/cag-direct-agy-$$.txt"
 env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
-    agy --print "$PROMPT" --print-timeout 8m --dangerously-skip-permissions > "$RAW" 2>&1 || RC=$?
+    agy --print "$PROMPT" --print-timeout 9m --dangerously-skip-permissions > "$RAW" 2>&1 || RC=$?
 RC=${RC:-0}
 cat "$RAW"
 ```

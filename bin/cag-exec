@@ -41,9 +41,10 @@ if [[ -d "$WORKTREE/.git" && ! -f "$WORKTREE/.git" ]]; then
 fi
 
 # 2. Read prompt from stdin
+[[ -t 0 ]] && { echo '{"error":"stdin is a terminal — pipe the prompt via stdin"}' >&2; exit 2; }
 PROMPT=$(cat)
-if [[ -z "$PROMPT" ]]; then
-  echo '{"error":"empty prompt from stdin"}' >&2
+if [[ -z "$PROMPT" ]] || [[ "$PROMPT" =~ '^[[:space:]]+$' ]]; then
+  echo '{"error":"empty or whitespace-only prompt from stdin"}' >&2
   exit 2
 fi
 ARTIFACT="/tmp/cag-exec-raw-$$.txt"
@@ -68,7 +69,7 @@ case "$PROVIDER" in
     CMD=(agy)
     [[ -n "$MODEL" ]] && CMD+=(--model "$MODEL")
     # Note: agy does not support reasoning effort parameter (verified 2026-06-06)
-    CMD+=(--print "$PROMPT" --print-timeout 8m --dangerously-skip-permissions)
+    CMD+=(--print "$PROMPT" --print-timeout 9m --dangerously-skip-permissions)
 
     env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
         "${CMD[@]}" > "$ARTIFACT" 2>&1 || EXIT_CODE=$?
@@ -83,17 +84,23 @@ EXIT_CODE=${EXIT_CODE:-0}
 # 4. Commit changes
 CHANGED=false
 if [[ -n "$(git status --porcelain)" ]]; then
+  # Guard: refuse to stage files larger than 50MB (accidental binary/dump generation)
+  LARGE_FILES=$(find . -type f -size +50M 2>/dev/null | head -5)
+  if [[ -n "$LARGE_FILES" ]]; then
+    echo '{"error":"large files detected (>50MB) — refusing to commit","files":"'"$(echo "$LARGE_FILES" | tr '\n' ' ')"'","worktree":"'"$WORKTREE"'"}' >&2
+    exit 2
+  fi
   git add -A
-  if git commit -q -m "cag: execution" 2>/dev/null; then
-    CHANGED=true
-  else
-    # Commit failed but changes staged (possibly hook rejection)
-    echo '{"error":"git commit failed but changes staged","worktree":"'"$WORKTREE"'"}' >&2
+  COMMIT_ERR=$(git commit -q -m "cag: execution" 2>&1) && CHANGED=true || true
+  if [[ "$CHANGED" != "true" ]]; then
+    # Commit failed but changes staged (e.g., hook rejection)
+    echo '{"error":"git commit failed but changes staged","reason":"'"$COMMIT_ERR"'","worktree":"'"$WORKTREE"'"}' >&2
     exit 2
   fi
 fi
 
 # 5. Output structured JSON
-DIFF_STAT=$(git show --shortstat HEAD 2>/dev/null | tr -d '\n' | sed 's/^[[:space:]]*//' || echo "no commit")
+DIFF_STAT=$(git show --shortstat HEAD 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//' || echo "no commit")
+[[ -z "$DIFF_STAT" ]] && DIFF_STAT="no commit"
 printf '{"exit_code":%d,"changed":%s,"diff_stat":"%s","artifact":"%s"}\n' \
   "$EXIT_CODE" "$CHANGED" "$DIFF_STAT" "$ARTIFACT"

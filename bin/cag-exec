@@ -1,0 +1,99 @@
+#!/bin/zsh
+# CAG execution choke point: worktree validation + env strip + provider exec + structured output
+set -euo pipefail
+
+if [[ $# -lt 2 ]]; then
+  echo '{"error":"usage: cag-exec <codex|agy> <worktree-abs-path> [model] [reasoning-effort]  (prompt from stdin)"}' >&2
+  exit 2
+fi
+
+PROVIDER=$1
+WORKTREE=$2
+MODEL=${3:-}           # Optional: model override (e.g., gpt-5.5, o3, gemini-2.0-flash-thinking)
+REASONING=${4:-}       # Optional: reasoning effort (low, medium, high, xhigh)
+
+# 0. Validate model availability (ChatGPT account limitations)
+if [[ "$PROVIDER" == "codex" && -n "$MODEL" ]]; then
+  case "$MODEL" in
+    gpt-5.5)
+      # Supported
+      ;;
+    gpt-4o|o3|o3-mini)
+      echo '{"error":"model_not_supported","provider":"codex","model":"'"$MODEL"'","message":"Model '"'$MODEL'"' not supported with ChatGPT account. Use gpt-5.5 or leave MODEL empty.","worktree":"'"$WORKTREE"'"}' >&2
+      exit 2
+      ;;
+    *)
+      # Unknown model, let codex try (might be a future model)
+      ;;
+  esac
+fi
+
+# 1. Validate worktree
+if [[ ! -d "$WORKTREE/.git" && ! -f "$WORKTREE/.git" ]]; then
+  echo '{"error":"WORKTREE missing .git","worktree":"'"$WORKTREE"'"}' >&2
+  exit 2
+fi
+
+# Worktree has .git as a file (points to main repo); main repo has .git as a directory
+if [[ -d "$WORKTREE/.git" && ! -f "$WORKTREE/.git" ]]; then
+  echo '{"error":"WORKTREE appears to be main repo (.git is directory, not file) — REJECTED","worktree":"'"$WORKTREE"'"}' >&2
+  exit 2
+fi
+
+# 2. Read prompt from stdin
+PROMPT=$(cat)
+if [[ -z "$PROMPT" ]]; then
+  echo '{"error":"empty prompt from stdin"}' >&2
+  exit 2
+fi
+ARTIFACT="/tmp/cag-exec-raw-$$.txt"
+
+# 3. Strip env + run provider
+cd "$WORKTREE"
+
+case "$PROVIDER" in
+  codex)
+    # Build command array to handle args properly
+    CMD=(codex exec)
+    [[ -n "$MODEL" ]] && CMD+=(--model "$MODEL")
+    [[ -n "$REASONING" ]] && CMD+=(-c "model_reasoning_effort=$REASONING")
+    CMD+=(--dangerously-bypass-approvals-and-sandbox -)
+
+    env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID \
+        -u CLAUDE_CODE_ENTRYPOINT -u RUST_LOG -u RUST_BACKTRACE -u RUST_LIB_BACKTRACE \
+        "${CMD[@]}" > "$ARTIFACT" 2>&1 <<< "$PROMPT" || EXIT_CODE=$?
+    ;;
+  agy)
+    # Build command array to handle args properly
+    CMD=(agy)
+    [[ -n "$MODEL" ]] && CMD+=(--model "$MODEL")
+    # Note: agy does not support reasoning effort parameter (verified 2026-06-06)
+    CMD+=(--print "$PROMPT" --print-timeout 8m --dangerously-skip-permissions)
+
+    env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
+        "${CMD[@]}" > "$ARTIFACT" 2>&1 || EXIT_CODE=$?
+    ;;
+  *)
+    echo '{"error":"unknown provider","provider":"'"$PROVIDER"'"}' >&2
+    exit 2
+    ;;
+esac
+EXIT_CODE=${EXIT_CODE:-0}
+
+# 4. Commit changes
+CHANGED=false
+if [[ -n "$(git status --porcelain)" ]]; then
+  git add -A
+  if git commit -q -m "cag: execution" 2>/dev/null; then
+    CHANGED=true
+  else
+    # Commit failed but changes staged (possibly hook rejection)
+    echo '{"error":"git commit failed but changes staged","worktree":"'"$WORKTREE"'"}' >&2
+    exit 2
+  fi
+fi
+
+# 5. Output structured JSON
+DIFF_STAT=$(git show --shortstat HEAD 2>/dev/null | tr -d '\n' | sed 's/^[[:space:]]*//' || echo "no commit")
+printf '{"exit_code":%d,"changed":%s,"diff_stat":"%s","artifact":"%s"}\n' \
+  "$EXIT_CODE" "$CHANGED" "$DIFF_STAT" "$ARTIFACT"

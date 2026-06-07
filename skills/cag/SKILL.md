@@ -56,10 +56,14 @@ PROMPT=$(cat <<'EXEC_PROMPT'
 EXEC_PROMPT
 )
 
+# Direct mode has NO jailbreak sentinel (it intentionally edits the main repo),
+# so the provider sandbox is the primary guard. -s workspace-write locks codex's
+# writable root to $PWD (the main repo) and refuses writes outside it; still
+# non-interactive, no approval prompt. (Was --dangerously-bypass-approvals-and-sandbox.)
 RAW="/tmp/cag-direct-codex-$$.txt"
 env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID \
     -u CLAUDE_CODE_ENTRYPOINT -u RUST_LOG -u RUST_BACKTRACE -u RUST_LIB_BACKTRACE \
-    codex exec --dangerously-bypass-approvals-and-sandbox - > "$RAW" 2>&1 <<< "$PROMPT" || RC=$?
+    codex exec -s workspace-write -C "$PWD" - > "$RAW" 2>&1 <<< "$PROMPT" || RC=$?
 RC=${RC:-0}
 cat "$RAW"
 ```
@@ -71,9 +75,13 @@ PROMPT=$(cat <<'EXEC_PROMPT'
 EXEC_PROMPT
 )
 
+# Direct mode has NO jailbreak sentinel, so agy's sandbox is the primary guard.
+# --add-dir "$PWD" pins the workspace to the main repo (agy may otherwise wander
+# to ~/.gemini/scratch); --sandbox replaces --dangerously-skip-permissions and is
+# what actually keeps agy in place (verified: --add-dir alone does not).
 RAW="/tmp/cag-direct-agy-$$.txt"
 env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
-    agy --print "$PROMPT" --print-timeout 9m --dangerously-skip-permissions > "$RAW" 2>&1 || RC=$?
+    agy --add-dir "$PWD" --sandbox --print "$PROMPT" --print-timeout 9m > "$RAW" 2>&1 || RC=$?
 RC=${RC:-0}
 cat "$RAW"
 ```
@@ -250,13 +258,13 @@ $HOME/.cache/cag/<repo>/<run>/artifacts/*.md
 |------|------|
 | main Claude | 规划 / 拆分 / 建 worktree / review diff / 跑测试 / 合并 / 清理 / 模式选择 |
 | codex/agy-delegate (Claude 子 agent) | Read,Grep,Glob,Bash；无 Agent/Edit/Write；只通过 `cag-exec` 在 `$WORKTREE` 内启动 provider 并解析结构化输出，绝不合并、绝不判定完成 |
-| codex / agy (provider) | 在 worktree 或工作树内自主改文件（无沙箱），改动被提交到分支等待主 Claude 审查 |
-| cag-exec (script) | 咽喉点：worktree 校验（≠主仓库根）+ env strip + provider exec（危险 flag 写死）+ git commit + 结构化 JSON 输出 |
+| codex / agy (provider) | 在 worktree 或工作树内自主改文件（**有沙箱约束**：codex `-s workspace-write`、agy `--sandbox`，可写根锁定工作区），改动被提交到分支等待主 Claude 审查 |
+| cag-exec (script) | 咽喉点：worktree 校验（≠主仓库根）+ env strip + provider exec（沙箱 flag：codex `-s workspace-write -C`、agy `--add-dir --sandbox`）+ 越狱哨兵（前后快照对比，provider 改主仓库 → exit 3）+ git commit + 结构化 JSON 输出 |
 
 ---
 
 ## Safety invariants
 
 - **执行权在 provider**（codex/agy 真改代码）
-- **隔离在 worktree + cag-exec 路径校验**（双保险）；base 分支只在主 worktree checkout，delegate 切不过去 → 越权 merge 爆炸半径天然受限
+- **隔离在 worktree + cag-exec 多层防御**：路径校验（≠主仓库根）+ provider 沙箱（codex `-s workspace-write`、agy `--add-dir`/`--sandbox`）+ 越狱哨兵（前后快照对比抓 provider 逃出 worktree 改主仓库 → exit 3）；base 分支只在主 worktree checkout，delegate 切不过去 → 越权 merge 爆炸半径天然受限
 - **判定权独占主 Claude**：永远看真实 diff + 真跑测试，绝不信 delegate 自述

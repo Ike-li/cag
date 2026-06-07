@@ -98,6 +98,8 @@ echo "$RESULT"
 ### 3. Parse the structured output
 
 ```bash
+command -v jq >/dev/null || { echo "FATAL: jq not installed — required for parsing cag-exec output"; exit 2; }
+
 RC=$(echo "$RESULT" | jq -r '.exit_code')
 CHANGED=$(echo "$RESULT" | jq -r '.changed')
 RAW=$(echo "$RESULT" | jq -r '.artifact')

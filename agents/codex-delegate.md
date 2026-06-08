@@ -24,6 +24,7 @@ You are a Codex CLI **executor** delegate. You run Codex to make real code chang
 - `ACCEPTANCE`— acceptance criteria to bake into the Codex prompt
 - `MODEL`     — (optional) model override (e.g., gpt-5.5, o3)
 - `REASONING` — (optional) reasoning effort (low, medium, high, xhigh)
+- `DRY_RUN`   — (optional) true — 透传 --dry-run 给 cag-exec；provider 正常运行，跳过 commit，输出 diff
 
 ## Workflow
 
@@ -45,17 +46,20 @@ PROMPT=$(cat <<'CODEX_PROMPT'
 CODEX_PROMPT
 )
 
-# Extract optional model/reasoning from contract (if provided)
+# Extract optional model/reasoning/dry-run from contract (if provided)
 MODEL_ARG=""
 REASONING_ARG=""
+DRY_RUN_FLAG=""
 [[ -n "${MODEL:-}" ]] && MODEL_ARG="$MODEL"
 [[ -n "${REASONING:-}" ]] && REASONING_ARG="$REASONING"
+[[ "${DRY_RUN:-}" == "true" ]] && DRY_RUN_FLAG="--dry-run"
 
 # cag-exec outputs JSON: {"exit_code":N,"changed":true|false,"diff_stat":"...","artifact":"..."}
+# In dry-run mode: {"exit_code":N,"dry_run":true,"changed":...,"diff_stat":"...","artifact":"..."}
 # Run with 90s timeout (codex typically needs 30-40s)
 RESULT_FILE="/tmp/cag-exec-result-$$.txt"
 {
-  echo "$PROMPT" | cag-exec codex "$WORKTREE" "$MODEL_ARG" "$REASONING_ARG"
+  echo "$PROMPT" | cag-exec $DRY_RUN_FLAG codex "$WORKTREE" "$MODEL_ARG" "$REASONING_ARG"
 } > "$RESULT_FILE" 2>&1 &
 EXEC_PID=$!
 

@@ -28,6 +28,7 @@ Large-context edits, documentation, multi-file overviews, UI/UX/readability chan
 - `ACCEPTANCE`— acceptance criteria to bake into the agy prompt
 - `MODEL`     — (optional) model override (e.g., gemini-2.0-flash-thinking)
 - `REASONING` — (optional) reasoning effort (low, medium, high, xhigh)
+- `DRY_RUN`   — (optional) true — 透传 --dry-run 给 cag-exec；provider 正常运行，跳过 commit，输出 diff
 
 ## Workflow
 
@@ -49,17 +50,20 @@ PROMPT=$(cat <<'AGY_PROMPT'
 AGY_PROMPT
 )
 
-# Extract optional model/reasoning from contract (if provided)
+# Extract optional model/reasoning/dry-run from contract (if provided)
 MODEL_ARG=""
 REASONING_ARG=""
+DRY_RUN_FLAG=""
 [[ -n "${MODEL:-}" ]] && MODEL_ARG="$MODEL"
 [[ -n "${REASONING:-}" ]] && REASONING_ARG="$REASONING"
+[[ "${DRY_RUN:-}" == "true" ]] && DRY_RUN_FLAG="--dry-run"
 
 # cag-exec outputs JSON: {"exit_code":N,"changed":true|false,"diff_stat":"...","artifact":"..."}
+# In dry-run mode: {"exit_code":N,"dry_run":true,"changed":...,"diff_stat":"...","artifact":"..."}
 # Run with 10-minute timeout (agy may need more time for large contexts)
 RESULT_FILE="/tmp/cag-exec-result-$$.txt"
 {
-  echo "$PROMPT" | cag-exec agy "$WORKTREE" "$MODEL_ARG" "$REASONING_ARG"
+  echo "$PROMPT" | cag-exec $DRY_RUN_FLAG agy "$WORKTREE" "$MODEL_ARG" "$REASONING_ARG"
 } > "$RESULT_FILE" 2>&1 &
 EXEC_PID=$!
 

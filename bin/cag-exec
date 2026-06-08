@@ -131,8 +131,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
     # Guard: refuse to stage files larger than 50MB (accidental binary/dump generation)
     LARGE_FILES=$(find . -type f -size +50M 2>/dev/null | head -5)
     if [[ -n "$LARGE_FILES" ]]; then
-      echo '{"error":"large files detected (>50MB) — refusing to commit","files":"'"$(echo "$LARGE_FILES" | tr '
-' ' ')"'","worktree":"'"$WORKTREE"'"}' >&2
+      echo '{"error":"large files detected (>50MB) — refusing to commit","files":"'"$(echo "$LARGE_FILES" | tr '\n' ' ')"'","worktree":"'"$WORKTREE"'"}' >&2
       exit 2
     fi
     git add -A

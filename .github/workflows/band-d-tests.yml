@@ -23,6 +23,10 @@ jobs:
 
       - name: Set up test environment
         run: |
+          # 安装 zsh（cag-exec 需要）
+          sudo apt-get update -qq
+          sudo apt-get install -y zsh
+
           # 确保脚本可执行
           chmod +x bin/mock-provider
           chmod +x bin/cag-exec

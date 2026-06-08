@@ -60,10 +60,14 @@ cd "$WORKTREE"
 MAIN_COMMON=$(git rev-parse --git-common-dir 2>/dev/null)
 MAIN_REPO=""
 MAIN_BEFORE=""
+MAIN_HEAD_BEFORE=""
 if [[ -n "$MAIN_COMMON" ]]; then
   MAIN_REPO=$(cd "$(dirname "$MAIN_COMMON")" && pwd)
   [[ "$MAIN_REPO" == "$(pwd)" ]] && MAIN_REPO=""   # not a linked worktree; skip
-  [[ -n "$MAIN_REPO" ]] && MAIN_BEFORE=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null)
+  if [[ -n "$MAIN_REPO" ]]; then
+    MAIN_BEFORE=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null)
+    MAIN_HEAD_BEFORE=$(git -C "$MAIN_REPO" rev-parse HEAD 2>/dev/null)
+  fi
 fi
 
 case "$PROVIDER" in
@@ -90,11 +94,12 @@ case "$PROVIDER" in
     CMD=(agy)
     [[ -n "$MODEL" ]] && CMD+=(--model "$MODEL")
     # Note: agy does not support reasoning effort parameter (verified 2026-06-06)
-    # --add-dir pins agy's workspace to the worktree (without it agy may treat
-    # ~/.gemini/.../scratch as workspace, search $HOME, and edit the main repo).
+    # CAVEAT: agy --add-dir is unreliable (Band C 6f: sometimes writes to
+    # ~/.gemini/.../scratch instead of WORKTREE). Use codex for critical tasks.
+    # --add-dir pins agy workspace to the worktree (when working).
     # --sandbox replaces --dangerously-skip-permissions: still non-interactive
     # under --print (verified: does not block on confirmation) but enables
-    # agy's terminal restrictions instead of auto-approving every tool call.
+    # agy terminal restrictions instead of auto-approving every tool call.
     CMD+=(--add-dir "$WORKTREE" --sandbox --print "$PROMPT" --print-timeout 9m)
 
     env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
@@ -108,16 +113,43 @@ esac
 EXIT_CODE=${EXIT_CODE:-0}
 
 # 3b. Jailbreak sentinel: a provider must only touch $WORKTREE. Compare the main
-# repo's working tree against the BEFORE snapshot; any NEW change means the
-# provider escaped its sandbox (observed with agy wandering to ~/.gemini/scratch,
-# then editing the main repo). Pre-existing uncommitted work is ignored — only
-# provider-introduced changes trip the sentinel. Refuse, do not commit, surface
-# evidence.
+# repo working tree AND commit history against BEFORE snapshots. Any NEW change
+# means the provider escaped its sandbox. Pre-existing work is ignored.
+# P2: Clean up escaped changes before refusing.
+# P3: Also check HEAD hash to detect commit escapes.
 if [[ -n "$MAIN_REPO" ]]; then
   MAIN_AFTER=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null)
-  if [[ "$MAIN_AFTER" != "$MAIN_BEFORE" ]]; then
+  MAIN_HEAD_AFTER=$(git -C "$MAIN_REPO" rev-parse HEAD 2>/dev/null)
+
+  WORKING_TREE_DIRTY=false
+  COMMIT_ESCAPE=false
+  [[ "$MAIN_AFTER" != "$MAIN_BEFORE" ]] && WORKING_TREE_DIRTY=true
+  [[ "$MAIN_HEAD_AFTER" != "$MAIN_HEAD_BEFORE" ]] && COMMIT_ESCAPE=true
+
+  if [[ "$WORKING_TREE_DIRTY" == "true" || "$COMMIT_ESCAPE" == "true" ]]; then
     ESC=$(comm -13 <(echo "$MAIN_BEFORE" | sort) <(echo "$MAIN_AFTER" | sort) | tr '\n' ';' | sed 's/"/\\"/g')
-    echo '{"error":"SANDBOX ESCAPE — provider modified main repo, not the worktree","main_repo":"'"$MAIN_REPO"'","escaped_changes":"'"$ESC"'","worktree":"'"$WORKTREE"'","artifact":"'"$ARTIFACT"'"}' >&2
+
+    # Clean up: reset commit if provider committed, then restore working tree.
+    if [[ "$COMMIT_ESCAPE" == "true" ]]; then
+      git -C "$MAIN_REPO" reset --hard "$MAIN_HEAD_BEFORE" >/dev/null 2>&1
+      ESC="COMMIT_ESCAPE:$MAIN_HEAD_BEFORE..$MAIN_HEAD_AFTER;$ESC"
+    fi
+
+    ESCAPED_FILES=$(comm -13 <(echo "$MAIN_BEFORE" | sort) <(echo "$MAIN_AFTER" | sort))
+    if [[ -n "$ESCAPED_FILES" ]]; then
+      cd "$MAIN_REPO"
+      while IFS= read -r line; do
+        STATUS="${line:0:2}"
+        FILE="${line:3}"
+        case "$STATUS" in
+          "??")  rm -f "$FILE" 2>/dev/null ;;
+          *)     git checkout -- "$FILE" 2>/dev/null || true ;;
+        esac
+      done <<< "$ESCAPED_FILES"
+      cd "$WORKTREE"
+    fi
+
+    echo '{"error":"SANDBOX ESCAPE (cleaned up)","main_repo":"'"$MAIN_REPO"'","escaped_changes":"'"$ESC"'","worktree":"'"$WORKTREE"'","artifact":"'"$ARTIFACT"'"}' >&2
     exit 3
   fi
 fi

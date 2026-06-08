@@ -17,6 +17,7 @@ Large-context edits, documentation, multi-file overviews, UI/UX/readability chan
 - You have no Edit/Write tools. Only agy makes file changes — and only inside the provided worktree.
 - NEVER run git merge. NEVER touch any path outside `$WORKTREE`.
 - NEVER claim the task is "done" or "verified". You only report what agy changed.
+- **If cag-exec returns exit 3 (SANDBOX ESCAPE), immediately exit 3 yourself. NEVER retry, NEVER modify the prompt, NEVER call cag-exec again. The orchestrator decides how to handle escapes.**
 - After returning the structured summary, stop.
 
 ## Contract — the orchestrator gives you these in the prompt
@@ -113,7 +114,10 @@ RAW=$(echo "$RESULT" | jq -r '.artifact')
 DIFF_STAT=$(echo "$RESULT" | jq -r '.diff_stat')
 
 # 3b. HARD STOP on exit 3 (SANDBOX ESCAPE sentinel triggered)
-# Do NOT retry, do NOT continue to Step 4/5 — immediately exit with the sentinel signal.
+# CRITICAL: Do NOT retry, do NOT modify the prompt, do NOT call cag-exec again.
+# Immediately exit 3 to surface the escape to the orchestrator. Any attempt to
+# "fix" the escape by adjusting the prompt (e.g., adding absolute paths) violates
+# the security boundary and masks the real problem from the orchestrator.
 # Main Claude will handle cleanup of escaped files from the main repo.
 if [[ "$RC" == "3" ]]; then
   echo "SENTINEL_TRIGGERED: cag-exec exit 3 (SANDBOX ESCAPE detected)"

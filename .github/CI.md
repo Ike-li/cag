@@ -1,6 +1,64 @@
 # CI/CD 配置说明
 
-本文档描述 CAG 项目的持续集成（CI）配置。
+本文档描述 CAG 项目的持续集成（CI）和本地开发工具配置。
+
+---
+
+## Pre-commit Hooks
+
+### 安装
+
+项目使用 [pre-commit](https://pre-commit.com) 管理 Git hooks。
+
+**首次设置**:
+```bash
+# 安装 pre-commit（如果未安装）
+pip install pre-commit
+# 或
+brew install pre-commit
+
+# 安装 hooks 到 .git/hooks/
+pre-commit install
+```
+
+### 配置的 Hooks
+
+**.pre-commit-config.yaml**:
+
+1. **trailing-whitespace**: 清理行尾空格
+2. **end-of-file-fixer**: 确保文件以换行符结尾
+3. **check-yaml**: YAML 语法检查
+4. **check-added-large-files**: 防止提交大文件（>1MB）
+5. **check-merge-conflict**: 检测 merge conflict markers
+6. **check-executables-have-shebangs**: 确保脚本有 shebang
+7. **shellcheck**: Shell 脚本静态分析（仅 error 级别）
+8. **markdownlint**: Markdown 格式检查（手动模式）
+
+### 使用
+
+**自动运行**（每次 `git commit` 时）:
+```bash
+git commit -m "your message"
+# pre-commit 自动运行，修复简单问题
+```
+
+**手动运行**（检查所有文件）:
+```bash
+pre-commit run --all-files
+```
+
+**跳过 hooks**（紧急情况）:
+```bash
+git commit --no-verify -m "emergency fix"
+```
+
+### 自定义配置
+
+**.markdownlint.yaml**: Markdown 规则配置
+- 行长度限制：120 字符
+- 允许 inline HTML
+- 允许重复标题
+- 禁用中文锚点检查
 
 ---
 

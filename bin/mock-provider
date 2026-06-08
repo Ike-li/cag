@@ -110,6 +110,54 @@ case "$BEHAVIOR" in
     echo "# Mock output\n\nTask: $PROMPT\n\nResult: symlink attack (dir)" > "$WORKTREE/mock-output.txt"
     ;;
 
+  path-traversal)
+    # S3: Path traversal attack - use relative paths to escape worktree
+    if [[ -z "$MAIN_REPO" ]]; then
+      echo '{"error":"path-traversal behavior requires main-repo path"}' >&2
+      exit 2
+    fi
+    echo "mock-provider: path traversal attack (../) to $MAIN_REPO" >&2
+    cd "$WORKTREE"
+    # Calculate relative path from worktree to main repo
+    # Worktree is typically at $MAIN_REPO/.worktrees/xxx, so ../../ goes back to main repo
+    echo "PATH TRAVERSAL ATTACK by mock-provider" > ../../ESCAPED_TRAVERSAL.txt 2>/dev/null || true
+    # Also try absolute path to main repo (more reliable for testing)
+    echo "PATH TRAVERSAL ATTACK by mock-provider" > "$MAIN_REPO/ESCAPED_TRAVERSAL.txt" 2>/dev/null || true
+    echo "# Mock output\n\nTask: $PROMPT\n\nResult: path traversal attack" > "$WORKTREE/mock-output.txt"
+    ;;
+
+  home-escape)
+    # S4: Home directory escape - use $HOME absolute path
+    echo "mock-provider: home directory escape attack" >&2
+    cd "$WORKTREE"
+    # Try to write to $HOME
+    echo "HOME ESCAPE ATTACK by mock-provider" > ~/cag-test-escape.txt 2>/dev/null || true
+    echo "# Mock output\n\nTask: $PROMPT\n\nResult: home escape attack" > "$WORKTREE/mock-output.txt"
+    ;;
+
+  shell-injection)
+    # R4: Shell injection test - output contains shell special characters
+    echo "mock-provider: shell injection test" >&2
+    cd "$WORKTREE"
+    # Create output with shell special characters that should NOT be executed
+    cat > "$WORKTREE/mock-output.txt" << 'EOF'
+# Mock output with shell injection attempts
+
+Task: test shell injection
+
+Result: completed with special characters
+
+Dangerous commands (should not execute):
+- $(whoami)
+- `date`
+- ; rm -rf /tmp/test
+- && echo "injected"
+- | cat /etc/passwd
+
+These should appear as literal text, not be executed.
+EOF
+    ;;
+
   clean)
     # Control: work correctly in worktree only
     echo "mock-provider: working cleanly in $WORKTREE" >&2
@@ -122,7 +170,7 @@ case "$BEHAVIOR" in
     ;;
 
   *)
-    echo '{"error":"unknown behavior","behavior":"'"$BEHAVIOR"'","valid":["untracked","modified","commit","symlink-file","symlink-dir","clean"]}' >&2
+    echo '{"error":"unknown behavior","behavior":"'"$BEHAVIOR"'","valid":["untracked","modified","commit","symlink-file","symlink-dir","path-traversal","home-escape","shell-injection","clean"]}' >&2
     exit 2
     ;;
 esac

@@ -2,8 +2,11 @@
 # CAG execution choke point: worktree validation + env strip + provider exec + structured output
 set -euo pipefail
 
+DRY_RUN=false
+[[ "${1:-}" == "--dry-run" ]] && { DRY_RUN=true; shift; }
+
 if [[ $# -lt 2 ]]; then
-  echo '{"error":"usage: cag-exec <codex|agy> <worktree-abs-path> [model] [reasoning-effort]  (prompt from stdin)"}' >&2
+  echo '{"error":"usage: cag-exec [--dry-run] <codex|agy> <worktree-abs-path> [model] [reasoning-effort]  (prompt from stdin)"}' >&2
   exit 2
 fi
 
@@ -122,30 +125,46 @@ fi
 # 4. Commit changes
 CHANGED=false
 if [[ -n "$(git status --porcelain)" ]]; then
-  # Guard: refuse to stage files larger than 50MB (accidental binary/dump generation)
-  LARGE_FILES=$(find . -type f -size +50M 2>/dev/null | head -5)
-  if [[ -n "$LARGE_FILES" ]]; then
-    echo '{"error":"large files detected (>50MB) — refusing to commit","files":"'"$(echo "$LARGE_FILES" | tr '\n' ' ')"'","worktree":"'"$WORKTREE"'"}' >&2
-    exit 2
-  fi
-  git add -A
-  COMMIT_ERR=$(git commit -q -m "cag: execution" 2>&1) && CHANGED=true || true
-  if [[ "$CHANGED" != "true" ]]; then
-    # Commit failed but changes staged (e.g., hook rejection)
-    echo '{"error":"git commit failed but changes staged","reason":"'"$COMMIT_ERR"'","worktree":"'"$WORKTREE"'"}' >&2
-    exit 2
+  if [[ "$DRY_RUN" == "true" ]]; then
+    CHANGED=true
+  else
+    # Guard: refuse to stage files larger than 50MB (accidental binary/dump generation)
+    LARGE_FILES=$(find . -type f -size +50M 2>/dev/null | head -5)
+    if [[ -n "$LARGE_FILES" ]]; then
+      echo '{"error":"large files detected (>50MB) — refusing to commit","files":"'"$(echo "$LARGE_FILES" | tr '\n' ' ')"'","worktree":"'"$WORKTREE"'"}' >&2
+      exit 2
+    fi
+    git add -A
+    COMMIT_ERR=$(git commit -q -m "cag: execution" 2>&1) && CHANGED=true || true
+    if [[ "$CHANGED" != "true" ]]; then
+      # Commit failed but changes staged (e.g., hook rejection)
+      echo '{"error":"git commit failed but changes staged","reason":"'"$COMMIT_ERR"'","worktree":"'"$WORKTREE"'"}' >&2
+      exit 2
+    fi
   fi
 fi
 
 # 5. Output structured JSON
-# diff_stat must agree with CHANGED: only read HEAD when this run produced the
-# commit (HEAD now points at it); otherwise HEAD is the pre-existing worktree
-# commit and its stat is unrelated to this execution.
-if [[ "$CHANGED" == "true" ]]; then
-  DIFF_STAT=$(git show --shortstat HEAD 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//')
-  [[ -z "$DIFF_STAT" ]] && DIFF_STAT="unknown"
+if [[ "$DRY_RUN" == "true" ]]; then
+  if [[ "$CHANGED" == "true" ]]; then
+    DIFF_STAT=$(git diff --shortstat HEAD 2>/dev/null | sed 's/^[[:space:]]*//')
+    [[ -z "$DIFF_STAT" ]] && DIFF_STAT=$(git diff --staged --shortstat 2>/dev/null | sed 's/^[[:space:]]*//')
+    [[ -z "$DIFF_STAT" ]] && DIFF_STAT="unknown"
+  else
+    DIFF_STAT="no changes"
+  fi
+  printf '{"exit_code":%d,"dry_run":true,"changed":%s,"diff_stat":"%s","artifact":"%s"}\n' \
+    "$EXIT_CODE" "$CHANGED" "$DIFF_STAT" "$ARTIFACT"
 else
-  DIFF_STAT="no changes"
+  # diff_stat must agree with CHANGED: only read HEAD when this run produced the
+  # commit (HEAD now points at it); otherwise HEAD is the pre-existing worktree
+  # commit and its stat is unrelated to this execution.
+  if [[ "$CHANGED" == "true" ]]; then
+    DIFF_STAT=$(git show --shortstat HEAD 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//')
+    [[ -z "$DIFF_STAT" ]] && DIFF_STAT="unknown"
+  else
+    DIFF_STAT="no changes"
+  fi
+  printf '{"exit_code":%d,"changed":%s,"diff_stat":"%s","artifact":"%s"}\n' \
+    "$EXIT_CODE" "$CHANGED" "$DIFF_STAT" "$ARTIFACT"
 fi
-printf '{"exit_code":%d,"changed":%s,"diff_stat":"%s","artifact":"%s"}\n' \
-  "$EXIT_CODE" "$CHANGED" "$DIFF_STAT" "$ARTIFACT"

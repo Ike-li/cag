@@ -18,6 +18,7 @@ argument-hint: "[codex|agy] <task>"
 /cag <task>                 # 自动选模式
 /cag codex <task>           # 强制用 codex（逻辑/重构/安全/测试）
 /cag agy <task>             # 强制用 agy（文档/大上下文/UI/UX）
+/cag --dry-run <task>       # Dry-run：provider 运行，只看 diff，不 commit
 ```
 
 ---
@@ -92,6 +93,8 @@ cat "$RAW"
 git --no-pager diff            # 审查每一个改动
 cd <repo> && <test/build/lint> # 真实验证
 ```
+
+> **dry-run 模式**：如果用 --dry-run 调用，步骤 1 执行后不 commit；`git --no-pager diff` 展示改动，确认后 `git checkout -- .` 清理，或手动 stage/commit。
 
 决策：
 - **pass** → 报告；可选 stage/commit（需先问用户，除非已授权）
@@ -177,8 +180,15 @@ SUBTASK:
 ACCEPTANCE:
 - <criterion 1>
 - <criterion 2>
+DRY_RUN: (optional) true — 透传 --dry-run 给 cag-exec；provider 正常运行，跳过 commit，输出 diff
 """
 )
+```
+
+```bash
+DRY_RUN_FLAG=""
+[[ "${DRY_RUN:-}" == "true" ]] && DRY_RUN_FLAG="--dry-run"
+echo "$PROMPT" | cag-exec $DRY_RUN_FLAG codex "$WORKTREE" "$MODEL_ARG" "$REASONING_ARG"
 ```
 
 有依赖的子任务：等上游完成，然后派发（可选复用上游 worktree）。

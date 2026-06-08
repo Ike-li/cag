@@ -44,3 +44,13 @@ ln -sfn /Users/raylee/code/cag/bin/cag-exec ~/.local/bin/cag-exec
 ## 部署状态
 
 CAG v2.1 已部署，软链接指向本仓库，codex/agy provider 均可用。
+
+## 实战测试
+
+详见 [TEST_REPORT_20260608.md](TEST_REPORT_20260608.md)。
+
+已完成 Band A/B 测试覆盖（7 rungs: direct mode、worktree mode、并行 fan-out、fix loop）。
+
+哨兵实战验证通过。
+
+发现 #3/#4 已在 commit 2a69351 修复。

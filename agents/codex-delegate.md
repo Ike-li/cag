@@ -108,6 +108,18 @@ RC=$(echo "$RESULT" | jq -r '.exit_code')
 CHANGED=$(echo "$RESULT" | jq -r '.changed')
 RAW=$(echo "$RESULT" | jq -r '.artifact')
 DIFF_STAT=$(echo "$RESULT" | jq -r '.diff_stat')
+
+# 3b. HARD STOP on exit 3 (SANDBOX ESCAPE sentinel triggered)
+# Do NOT retry, do NOT continue to Step 4/5 — immediately exit with the sentinel signal.
+# Main Claude will handle cleanup of escaped files from the main repo.
+if [[ "$RC" == "3" ]]; then
+  echo "SENTINEL_TRIGGERED: cag-exec exit 3 (SANDBOX ESCAPE detected)"
+  echo "exit_code: 3"
+  echo "artifact: $RAW"
+  echo "diff_stat: $DIFF_STAT"
+  echo "message: Provider escaped worktree sandbox. Main Claude must clean escaped files from main repo working tree."
+  exit 3
+fi
 ```
 
 ### 4. Write the artifact (real output + real diff — no placeholders)

@@ -198,6 +198,23 @@ echo "$PROMPT" | cag-exec $DRY_RUN_FLAG codex "$WORKTREE" "$MODEL_ARG" "$REASONI
 **不要信任 delegate 自述**。对每个分支：
 
 ```bash
+# 4-pre. Exit 3 (SANDBOX ESCAPE) 前置处理
+# Delegate 遇到哨兵 exit 3 会立即停止并输出 "SENTINEL_TRIGGERED"。
+# 主 Claude 需清理主仓库的越狱残留（哨兵只检测+拒commit，不清理文件）。
+if grep -q "SENTINEL_TRIGGERED" <delegate output>; then
+  echo "⚠️ 哨兵触发：provider 逃出 worktree sandbox"
+  MAIN_REPO=$(git -C "$WT" rev-parse --git-common-dir | xargs dirname)
+  
+  # 清理越狱残留（modified 回滚 + untracked 删除）
+  git -C "$MAIN_REPO" checkout -- . 2>/dev/null
+  git -C "$MAIN_REPO" clean -fd 2>/dev/null
+  
+  echo "残留已清理（主仓库恢复 clean）"
+  echo "决策：reject（哨兵阻断，不可重试）"
+  # 记录到 reject 列表，Step 6 跳过此分支，Final report 上报用户
+  continue  # 跳到下一个 worktree
+fi
+
 # 4a. 审查真实 diff
 git -C "$WT" --no-pager show --stat HEAD
 git -C "$WT" --no-pager diff "$BASE"...HEAD

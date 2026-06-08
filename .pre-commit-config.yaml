@@ -1,0 +1,62 @@
+# Pre-commit hooks for CAG
+# See https://pre-commit.com for more information
+
+repos:
+  # 基础检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # 清理 trailing whitespace
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+
+      # 确保文件以换行符结尾
+      - id: end-of-file-fixer
+
+      # 检查 YAML 语法
+      - id: check-yaml
+        args: [--unsafe]  # 允许自定义 YAML tags
+
+      # 检查大文件（避免误提交）
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+
+      # 检查 merge conflict markers
+      - id: check-merge-conflict
+
+      # 检查可执行脚本有 shebang
+      - id: check-executables-have-shebangs
+
+      # 检查 JSON 语法
+      - id: check-json
+
+  # Shell 脚本检查
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=error]  # 只报告 error（忽略 warning）
+        files: \.(sh|bash|zsh)$
+        types: [file]
+
+  # Markdown lint（仅信息性，不阻塞提交）
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
+    hooks:
+      - id: markdownlint
+        args: [--fix]  # 自动修复简单问题
+        files: \.md$
+        verbose: true
+        # 允许失败，不阻塞提交
+        stages: [manual]
+
+# 配置说明：
+# - trailing-whitespace: 清理行尾空格（保留 markdown 换行）
+# - end-of-file-fixer: 确保文件以换行符结尾
+# - check-yaml: 检查 YAML 语法（GitHub Actions workflows）
+# - check-added-large-files: 防止误提交大文件（>1MB）
+# - check-merge-conflict: 防止提交包含冲突标记的文件
+# - check-executables-have-shebangs: 确保可执行脚本有 shebang
+# - no-commit-to-branch: 防止直接提交到 main/master（应该用分支）
+# - shellcheck: Shell 脚本静态分析
+# - markdownlint: Markdown 格式检查

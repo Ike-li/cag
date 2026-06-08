@@ -1,0 +1,24 @@
+# Markdownlint 配置
+# 放宽一些规则以适应技术文档
+
+# MD013: 行长度限制
+MD013:
+  line_length: 120  # 从 80 改为 120，适应技术文档
+  code_blocks: false  # 不检查代码块
+  tables: false  # 不检查表格
+
+# MD033: 允许 inline HTML（某些场景需要）
+MD033: false
+
+# MD041: 不强制第一行是 H1（agent 定义文件不需要）
+MD041: false
+
+# MD040: 代码块语言标记（放宽限制）
+MD040: false  # 完全禁用，因为很多场景不需要语言标记
+
+# MD024: 允许重复标题（不同章节可能有相同标题）
+MD024:
+  siblings_only: true  # 只检查同级标题
+
+# MD051: Link fragments（中文锚点）
+MD051: false  # 禁用，因为中文锚点可能不被正确识别

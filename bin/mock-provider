@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# mock-provider: Controllable fake provider for testing cag-exec sentinel
+# Usage: mock-provider <worktree> <behavior> [main-repo]
+# Behaviors:
+#   untracked  - create untracked file in main repo
+#   modified   - modify existing file in main repo
+#   commit     - commit changes in main repo
+#   clean      - work correctly in worktree only (control)
+set -euo pipefail
+
+WORKTREE="${1:-}"
+BEHAVIOR="${2:-clean}"
+MAIN_REPO="${3:-}"
+
+if [[ -z "$WORKTREE" ]]; then
+  echo '{"error":"mock-provider requires worktree path"}' >&2
+  exit 2
+fi
+
+# Read prompt from stdin (match codex/agy interface)
+PROMPT=$(cat)
+
+# Validate worktree exists
+if [[ ! -d "$WORKTREE" ]]; then
+  echo '{"error":"worktree does not exist","worktree":"'"$WORKTREE"'"}' >&2
+  exit 2
+fi
+
+# Simulate thinking time
+sleep 0.5
+
+case "$BEHAVIOR" in
+  untracked)
+    # P2 test: create untracked file in main repo
+    if [[ -z "$MAIN_REPO" ]]; then
+      echo '{"error":"untracked behavior requires main-repo path"}' >&2
+      exit 2
+    fi
+    echo "mock-provider: escaping to $MAIN_REPO (untracked)" >&2
+    echo "escaped by mock-provider" > "$MAIN_REPO/ESCAPED_UNTRACKED.txt"
+    # Also do legit work in worktree to simulate real provider
+    echo "# Mock output\n\nTask: $PROMPT\n\nResult: escaped (untracked)" > "$WORKTREE/mock-output.txt"
+    ;;
+
+  modified)
+    # P2 test: modify existing file in main repo
+    if [[ -z "$MAIN_REPO" ]]; then
+      echo '{"error":"modified behavior requires main-repo path"}' >&2
+      exit 2
+    fi
+    echo "mock-provider: escaping to $MAIN_REPO (modified)" >&2
+    # Find an existing file to modify
+    EXISTING=$(find "$MAIN_REPO" -maxdepth 1 -type f ! -name ".*" | head -1)
+    if [[ -n "$EXISTING" ]]; then
+      echo "ESCAPED MODIFICATION by mock-provider" >> "$EXISTING"
+    else
+      # Fallback: create new file
+      echo "escaped (no file to modify)" > "$MAIN_REPO/ESCAPED_MODIFIED.txt"
+    fi
+    echo "# Mock output\n\nTask: $PROMPT\n\nResult: escaped (modified)" > "$WORKTREE/mock-output.txt"
+    ;;
+
+  commit)
+    # P3 test: commit in main repo
+    if [[ -z "$MAIN_REPO" ]]; then
+      echo '{"error":"commit behavior requires main-repo path"}' >&2
+      exit 2
+    fi
+    echo "mock-provider: escaping to $MAIN_REPO (commit)" >&2
+    cd "$MAIN_REPO"
+    echo "escaped by mock-provider" > ESCAPED_COMMITTED.txt
+    git add ESCAPED_COMMITTED.txt
+    git commit -m "ESCAPE: mock-provider committed" >/dev/null 2>&1
+    cd "$WORKTREE"
+    echo "# Mock output\n\nTask: $PROMPT\n\nResult: escaped (commit)" > "$WORKTREE/mock-output.txt"
+    ;;
+
+  clean)
+    # Control: work correctly in worktree only
+    echo "mock-provider: working cleanly in $WORKTREE" >&2
+    echo -e "# Mock output\n\nTask: $PROMPT\n\nResult: completed cleanly in worktree" > "$WORKTREE/mock-output.txt"
+    ;;
+
+  *)
+    echo '{"error":"unknown behavior","behavior":"'"$BEHAVIOR"'","valid":["untracked","modified","commit","clean"]}' >&2
+    exit 2
+    ;;
+esac
+
+echo "Mock provider finished (behavior: $BEHAVIOR)" >&2
+exit 0

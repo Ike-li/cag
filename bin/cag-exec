@@ -6,7 +6,7 @@ DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && { DRY_RUN=true; shift; }
 
 if [[ $# -lt 2 ]]; then
-  echo '{"error":"usage: cag-exec [--dry-run] <codex|agy> <worktree-abs-path> [model] [reasoning-effort]  (prompt from stdin)"}' >&2
+  echo '{"error":"usage: cag-exec [--dry-run] <codex|agy|mock> <worktree-abs-path> [model] [reasoning-effort]  (prompt from stdin)"}' >&2
   exit 2
 fi
 
@@ -14,6 +14,7 @@ PROVIDER=$1
 WORKTREE=$2
 MODEL=${3:-}           # Optional: model override (e.g., gpt-5.5, o3, gemini-2.0-flash-thinking)
 REASONING=${4:-}       # Optional: reasoning effort (low, medium, high, xhigh)
+MOCK_BEHAVIOR=${5:-}   # For mock provider: untracked|modified|commit|clean
 
 # 0. Validate model availability (ChatGPT account limitations)
 if [[ "$PROVIDER" == "codex" && -n "$MODEL" ]]; then
@@ -104,6 +105,29 @@ case "$PROVIDER" in
 
     env -u CLAUDECODE -u CLAUDE_SESSION_ID -u CLAUDECODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
         "${CMD[@]}" > "$ARTIFACT" 2>&1 || EXIT_CODE=$?
+    ;;
+  mock)
+    # Mock provider for testing sentinel logic. Requires MOCK_BEHAVIOR parameter.
+    # Find mock-provider in same directory as cag-exec
+    SCRIPT_DIR=$(cd "$(dirname "${(%):-%N}")" && pwd)
+    MOCK_PROVIDER="$SCRIPT_DIR/mock-provider"
+    if [[ ! -x "$MOCK_PROVIDER" ]]; then
+      echo '{"error":"mock-provider not found","expected":"'"$MOCK_PROVIDER"'"}' >&2
+      exit 2
+    fi
+
+    # Compute MAIN_REPO for escape behaviors (needed before Step 3 snapshot)
+    MOCK_MAIN_COMMON=$(git rev-parse --git-common-dir 2>/dev/null)
+    MOCK_MAIN_REPO=""
+    if [[ -n "$MOCK_MAIN_COMMON" ]]; then
+      MOCK_MAIN_REPO=$(cd "$(dirname "$MOCK_MAIN_COMMON")" && pwd)
+      [[ "$MOCK_MAIN_REPO" == "$(pwd)" ]] && MOCK_MAIN_REPO=""   # not a linked worktree
+    fi
+
+    # Default behavior: clean (if not specified)
+    BEHAVIOR="${MODEL:-clean}"
+
+    "$MOCK_PROVIDER" "$WORKTREE" "$BEHAVIOR" "$MOCK_MAIN_REPO" > "$ARTIFACT" 2>&1 <<< "$PROMPT" || EXIT_CODE=$?
     ;;
   *)
     echo '{"error":"unknown provider","provider":"'"$PROVIDER"'"}' >&2

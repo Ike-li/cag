@@ -75,14 +75,54 @@ case "$BEHAVIOR" in
     echo "# Mock output\n\nTask: $PROMPT\n\nResult: escaped (commit)" > "$WORKTREE/mock-output.txt"
     ;;
 
+  symlink-file)
+    # S1: Symlink file attack - create symlink to main repo file, then write through it
+    if [[ -z "$MAIN_REPO" ]]; then
+      echo '{"error":"symlink-file behavior requires main-repo path"}' >&2
+      exit 2
+    fi
+    echo "mock-provider: symlink attack (file) to $MAIN_REPO" >&2
+    # Create target file in main repo if not exists
+    [[ -f "$MAIN_REPO/target.txt" ]] || echo "original content" > "$MAIN_REPO/target.txt"
+    # Create symlink in worktree pointing to main repo
+    cd "$WORKTREE"
+    ln -s "$MAIN_REPO/target.txt" fake.txt
+    # Write through symlink (writes to main repo)
+    echo "SYMLINK ATTACK by mock-provider" >> fake.txt
+    echo "# Mock output\n\nTask: $PROMPT\n\nResult: symlink attack (file)" > "$WORKTREE/mock-output.txt"
+    ;;
+
+  symlink-dir)
+    # S2: Symlink directory attack - create symlink to main repo dir, then write inside
+    if [[ -z "$MAIN_REPO" ]]; then
+      echo '{"error":"symlink-dir behavior requires main-repo path"}' >&2
+      exit 2
+    fi
+    echo "mock-provider: symlink attack (dir) to $MAIN_REPO" >&2
+    # Create target directory in main repo if not exists
+    mkdir -p "$MAIN_REPO/targetdir"
+    [[ -f "$MAIN_REPO/targetdir/file.txt" ]] || echo "original" > "$MAIN_REPO/targetdir/file.txt"
+    # Create symlink in worktree pointing to main repo directory
+    cd "$WORKTREE"
+    ln -s "$MAIN_REPO/targetdir" fakedir
+    # Write through symlink (writes to main repo)
+    echo "SYMLINK DIR ATTACK by mock-provider" >> fakedir/file.txt
+    echo "# Mock output\n\nTask: $PROMPT\n\nResult: symlink attack (dir)" > "$WORKTREE/mock-output.txt"
+    ;;
+
   clean)
     # Control: work correctly in worktree only
     echo "mock-provider: working cleanly in $WORKTREE" >&2
+    # Support optional delay for concurrency testing
+    DELAY="${4:-0}"
+    if [[ "$DELAY" =~ ^[0-9]+$ ]] && [[ "$DELAY" -gt 0 ]]; then
+      sleep "$DELAY"
+    fi
     echo -e "# Mock output\n\nTask: $PROMPT\n\nResult: completed cleanly in worktree" > "$WORKTREE/mock-output.txt"
     ;;
 
   *)
-    echo '{"error":"unknown behavior","behavior":"'"$BEHAVIOR"'","valid":["untracked","modified","commit","clean"]}' >&2
+    echo '{"error":"unknown behavior","behavior":"'"$BEHAVIOR"'","valid":["untracked","modified","commit","symlink-file","symlink-dir","clean"]}' >&2
     exit 2
     ;;
 esac

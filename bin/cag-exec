@@ -173,6 +173,13 @@ if [[ -n "$MAIN_REPO" ]]; then
       cd "$WORKTREE"
     fi
 
+    # P2 enhancement: Clean up worktree artifacts (symlinks, untracked files)
+    # that might have been left by the escape attempt.
+    cd "$WORKTREE"
+    # Remove untracked files and symlinks in worktree (but keep .git)
+    git clean -fd -e .git >/dev/null 2>&1 || true
+    cd - >/dev/null
+
     echo '{"error":"SANDBOX ESCAPE (cleaned up)","main_repo":"'"$MAIN_REPO"'","escaped_changes":"'"$ESC"'","worktree":"'"$WORKTREE"'","artifact":"'"$ARTIFACT"'"}' >&2
     exit 3
   fi

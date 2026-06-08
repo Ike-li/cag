@@ -158,6 +158,25 @@ These should appear as literal text, not be executed.
 EOF
     ;;
 
+  crash)
+    # R1: Provider crash test - simulate SEGFAULT
+    echo "mock-provider: simulating crash (SEGFAULT)" >&2
+    # Exit with non-zero to simulate crash (actual SEGFAULT would be exit 139)
+    exit 139
+    ;;
+
+  malformed)
+    # R3: Malformed output test - output non-JSON garbage
+    echo "mock-provider: outputting malformed data" >&2
+    cd "$WORKTREE"
+    cat > "$WORKTREE/mock-output.txt" << 'EOF'
+This is not JSON at all!
+Just random text that cannot be parsed.
+Special characters: <>&"'\{}[]
+Incomplete JSON: {"key": "value"
+EOF
+    ;;
+
   clean)
     # Control: work correctly in worktree only
     echo "mock-provider: working cleanly in $WORKTREE" >&2
@@ -170,7 +189,7 @@ EOF
     ;;
 
   *)
-    echo '{"error":"unknown behavior","behavior":"'"$BEHAVIOR"'","valid":["untracked","modified","commit","symlink-file","symlink-dir","path-traversal","home-escape","shell-injection","clean"]}' >&2
+    echo '{"error":"unknown behavior","behavior":"'"$BEHAVIOR"'","valid":["untracked","modified","commit","symlink-file","symlink-dir","path-traversal","home-escape","shell-injection","crash","malformed","clean"]}' >&2
     exit 2
     ;;
 esac

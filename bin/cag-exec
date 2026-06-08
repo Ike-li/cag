@@ -58,6 +58,7 @@ cd "$WORKTREE"
 
 # Snapshot main repo state BEFORE provider runs, so the sentinel can tell a
 # provider-caused escape from pre-existing uncommitted work in the main repo.
+# P5: Filter out .worktrees/ entries to avoid false positives from concurrent worktrees.
 MAIN_COMMON=$(git rev-parse --git-common-dir 2>/dev/null)
 MAIN_REPO=""
 MAIN_BEFORE=""
@@ -66,7 +67,8 @@ if [[ -n "$MAIN_COMMON" ]]; then
   MAIN_REPO=$(cd "$(dirname "$MAIN_COMMON")" && pwd)
   [[ "$MAIN_REPO" == "$(pwd)" ]] && MAIN_REPO=""   # not a linked worktree; skip
   if [[ -n "$MAIN_REPO" ]]; then
-    MAIN_BEFORE=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null)
+    # Filter out ALL .worktrees/ entries (other concurrent worktrees, any status)
+    MAIN_BEFORE=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null | grep -v " .worktrees/" || true)
     MAIN_HEAD_BEFORE=$(git -C "$MAIN_REPO" rev-parse HEAD 2>/dev/null)
   fi
 fi
@@ -141,8 +143,10 @@ EXIT_CODE=${EXIT_CODE:-0}
 # means the provider escaped its sandbox. Pre-existing work is ignored.
 # P2: Clean up escaped changes before refusing.
 # P3: Also check HEAD hash to detect commit escapes.
+# P5: Filter out .worktrees/ entries to avoid false positives from concurrent worktrees.
 if [[ -n "$MAIN_REPO" ]]; then
-  MAIN_AFTER=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null)
+  # Filter out ALL .worktrees/ entries (same as BEFORE snapshot, any status)
+  MAIN_AFTER=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null | grep -v " .worktrees/" || true)
   MAIN_HEAD_AFTER=$(git -C "$MAIN_REPO" rev-parse HEAD 2>/dev/null)
 
   WORKING_TREE_DIRTY=false

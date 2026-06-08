@@ -9,6 +9,7 @@ argument-hint: "[codex|agy] <task>"
 **codex/agy 直接执行改动，Claude 验证并合并。**
 
 自动选择模式：
+
 - **direct mode** — 单一小改动，provider 直接编辑工作树，Claude 审查 git diff + 跑测试
 - **worktree mode** — 多任务并行/有风险，每个子任务在独立 worktree 隔离执行，Claude 验证后合并
 
@@ -26,6 +27,7 @@ argument-hint: "[codex|agy] <task>"
 ## Mode selection (automatic)
 
 **当满足以下任一条件时，自动切换到 worktree mode：**
+
 - 任务可拆分为 2+ 个文件不相交的子任务（可并行）
 - 任务涉及多个模块/组件（需隔离验证）
 - 任务有回滚风险（需要分支隔离）
@@ -51,6 +53,7 @@ which codex agy
 Direct mode calls the provider directly (no cag-exec, since we're working in main repo).
 
 **For codex:**
+
 ```bash
 PROMPT=$(cat <<'EXEC_PROMPT'
 <task + acceptance criteria + "edit files directly">
@@ -70,6 +73,7 @@ cat "$RAW"
 ```
 
 **For agy:**
+
 ```bash
 PROMPT=$(cat <<'EXEC_PROMPT'
 <task + acceptance criteria + "edit files directly">
@@ -97,6 +101,7 @@ cd <repo> && <test/build/lint> # 真实验证
 > **dry-run 模式**：如果用 --dry-run 调用，步骤 1 执行后不 commit；`git --no-pager diff` 展示改动，确认后 `git checkout -- .` 清理，或手动 stage/commit。
 
 决策：
+
 - **pass** → 报告；可选 stage/commit（需先问用户，除非已授权）
 - **fail** → 用失败详情重跑 executor（最多 2 轮）
 - **错误/不安全改动** → `git checkout -- <files>` 回滚，然后报告
@@ -134,6 +139,7 @@ git status --porcelain | head  # 从干净 base 合并更清晰
 ```
 
 设置路径：
+
 ```bash
 BASE=$(git branch --show-current)
 REPO=$(basename "$(git rev-parse --show-toplevel)")
@@ -147,6 +153,7 @@ mkdir -p "$ROOT/artifacts"
 拆分为独立子任务。**关键规则：子任务应该文件不相交**，以便并行分支干净合并。如果两个子任务必须碰同一文件，则在同一 worktree 上顺序执行而非并行。
 
 为每个子任务决定：
+
 - executor: `codex`（逻辑/重构/安全/测试）或 `agy`（文档/大上下文/UI/UX）
 - `ACCEPTANCE`: 具体可验证标准
 - 如何验证: 实际的 test/build/lint 命令
@@ -156,10 +163,12 @@ mkdir -p "$ROOT/artifacts"
 ### Step 2 — Create one worktree per subtask
 
 每个子任务 `id`：
+
 ```bash
 WT="$ROOT/wt/$id"
 git worktree add -q "$WT" -b "cag/$id" HEAD
 ```
+
 （从当前 HEAD 分支，保留你的上下文。）
 
 ### Step 3 — Dispatch executors in parallel
@@ -204,11 +213,11 @@ echo "$PROMPT" | cag-exec $DRY_RUN_FLAG codex "$WORKTREE" "$MODEL_ARG" "$REASONI
 if grep -q "SENTINEL_TRIGGERED" <delegate output>; then
   echo "⚠️ 哨兵触发：provider 逃出 worktree sandbox"
   MAIN_REPO=$(git -C "$WT" rev-parse --git-common-dir | xargs dirname)
-  
+
   # 清理越狱残留（modified 回滚 + untracked 删除）
   git -C "$MAIN_REPO" checkout -- . 2>/dev/null
   git -C "$MAIN_REPO" clean -fd 2>/dev/null
-  
+
   echo "残留已清理（主仓库恢复 clean）"
   echo "决策：reject（哨兵阻断，不可重试）"
   # 记录到 reject 列表，Step 6 跳过此分支，Final report 上报用户
@@ -232,6 +241,7 @@ cd "$WT" && <test / build / lint command for this subtask>
 ### Step 6 — Merge accepted work (main Claude)
 
 从主工作树（在 `$BASE`），逐个合并已接受的分支：
+
 ```bash
 git merge --no-ff --no-edit "cag/$id"   # 解决/暴露冲突
 ```

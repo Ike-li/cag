@@ -11,12 +11,14 @@
 **文件**: `.github/workflows/band-d-tests.yml`
 
 **触发条件**:
+
 - Push 到 `main` 或 `develop` 分支
 - Pull Request 到 `main` 分支
 - 修改 `bin/`、`tests/` 或 workflow 文件时
 - 手动触发（workflow_dispatch）
 
 **运行环境**:
+
 - OS: Ubuntu Latest
 - 超时: 15 分钟
 
@@ -25,6 +27,7 @@
 ## 测试阶段
 
 ### P0: Core Defense（必须通过）
+
 - S1-S2: 符号链接攻击
 - C1-C3: 并发压力（串行/低/中）
 - A1: 对抗基线
@@ -34,6 +37,7 @@
 ---
 
 ### P1: High-Value Scenarios（允许部分失败）
+
 - S3-S4: 路径遍历
 - C5: 混合并发
 - R4: Shell injection
@@ -43,6 +47,7 @@
 ---
 
 ### P2: Edge Cases（必须通过）
+
 - R1-R3: Provider 错误处理
 - C4: 高并发（10 worktree）
 - S5: Git hooks 注入
@@ -106,12 +111,14 @@ tests/band-d/test-s5-git-hooks.sh
 ## 环境要求
 
 CI 需要以下环境：
+
 - ✅ Git（测试创建临时仓库）
 - ✅ Bash/Zsh（测试脚本）
 - ✅ `bin/mock-provider`（模拟 provider）
 - ✅ `bin/cag-exec`（被测对象）
 
 **不需要**:
+
 - ❌ 真实 codex/agy（使用 mock-provider）
 - ❌ Claude Code（测试是独立的）
 - ❌ 外部依赖（所有测试使用临时目录）
@@ -123,6 +130,7 @@ CI 需要以下环境：
 ### 1. 查看 GitHub Actions 日志
 
 在 GitHub 仓库的 "Actions" 标签页查看：
+
 - 每个测试步骤的详细输出
 - 失败的具体错误信息
 - 测试摘要
@@ -141,14 +149,17 @@ tests/band-d/test-xxx.sh
 ### 3. 常见问题
 
 **问题**: 测试超时
+
 - **原因**: 并发测试卡住
 - **解决**: 检查 `git worktree` 是否正常工作
 
 **问题**: Git 权限错误
+
 - **原因**: CI 环境 git config 未设置
 - **解决**: Workflow 已自动配置 user.name 和 user.email
 
 **问题**: 文件权限错误
+
 - **原因**: 测试脚本不可执行
 - **解决**: Workflow 已自动 `chmod +x`
 
@@ -160,6 +171,7 @@ tests/band-d/test-xxx.sh
 
 1. 在 `tests/band-d/` 添加新测试脚本
 2. 在 workflow 中添加步骤：
+
    ```yaml
    - name: Run New Test
      run: |

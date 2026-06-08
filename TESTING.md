@@ -41,6 +41,7 @@
 ### 目标
 
 验证 cag 在以下场景下的防御能力和稳定性：
+
 - **对抗性**：真实 LLM agent 是否遵守安全契约
 - **安全攻击**：符号链接、路径遍历、shell injection 等
 - **并发压力**：多 worktree 并发执行的正确性
@@ -49,11 +50,13 @@
 ### 测试框架
 
 **Band D 测试**分为三个阶段：
+
 - **P0 核心防御**（6 个用例）：验证最高风险区域
 - **P1 高价值场景**（5 个用例）：补全高风险场景
 - **P2 边缘场景**（4 个用例）：异常处理和高并发验证
 
 **测试工具**：
+
 - `bin/mock-provider`：模拟 provider 的 11 种行为（clean、escape、crash 等）
 - `bin/cag-exec`：咽喉脚本，被测目标
 - 9 个测试脚本：覆盖 A/S/C/R 四个维度
@@ -83,6 +86,7 @@
 | A1 | test-a1-adversarial-baseline.sh | 对抗基线（自动化） | ✅ 哨兵触发 |
 
 **关键成就**：
+
 - 发现并修复 P4（worktree 清理不完整）
 - 并发压力 100% 成功
 - 符号链接攻击完全拦截
@@ -100,6 +104,7 @@
 | R4 | test-r4-shell-injection.sh | Shell injection | ✅ 不执行 |
 
 **关键发现**：
+
 - **发现 4**：P1 契约在真实 LLM delegate 场景下可靠
 - **发现 5**：哨兵边界识别（只保护 git 仓库）
 - **发现 6**：混合并发假阳性（时序竞争）
@@ -116,6 +121,7 @@
 | S5 | test-s5-git-hooks.sh | Git hooks 注入 | ⚠️ 确认路径 |
 
 **关键发现**：
+
 - **发现 7**：分层设计验证（cag-exec 报告，主 Claude 判断）
 - **发现 8**：畸形输出不影响系统稳定性
 - **发现 9**：10 并发 100% 成功
@@ -128,6 +134,7 @@
 ### CI/CD 自动化
 
 **GitHub Actions 自动运行**：
+
 - Push 到 `main` 或 `develop` 分支时
 - 创建 Pull Request 到 `main` 时
 - 手动触发（GitHub Actions 页面）
@@ -189,14 +196,17 @@ done
 ### 1. $HOME 目录逃逸（S4）
 
 **问题**：
+
 - Provider 可以写入 `~/cag-test-escape.txt`
 - 哨兵无法检测（$HOME 不在 git 管理范围）
 
 **根因**：
+
 - 哨兵基于 `git status --porcelain`
 - 设计上只保护 git 仓库内文件
 
 **缓解措施**：
+
 - ✅ 依赖 provider 层防御：
   - `agy --sandbox`：限制文件系统访问
   - `codex -s workspace-write`：限制写入范围
@@ -209,15 +219,18 @@ done
 ### 2. 混合并发假阳性（C5 + P5 修复）
 
 **问题**：
+
 - 3 clean + 2 escape 并发时，clean 任务有 20-40% 可能被误判为 escape
 - P5 修复后改进到 60-80% 稳定性
 
 **根因**：
+
 - 多个 worktree 共享 `.git` 目录
 - 哨兵读取快照时看到其他 worktree 的 escape 文件
 - P5 过滤了 `.worktrees/` 目录，但主仓库文件仍会互相影响
 
 **缓解措施**：
+
 - ✅ 避免并发运行多个 escape 场景（串行执行）
 - ✅ 纯 clean 场景并发不受影响（C1-C4 全部 100%）
 - 可选：完整解决需要 per-worktree 状态跟踪（复杂）
@@ -229,13 +242,16 @@ done
 ### 3. Git Hooks 攻击路径（S5）
 
 **问题**：
+
 - Provider escape 到主仓库 → 创建 `.git/hooks/pre-commit` → 下次 commit 执行任意代码
 
 **根因**：
+
 - Worktree commit 会触发主仓库的 hooks
 - Hook 在 git commit 时执行（不在 provider 沙箱内）
 
 **缓解措施**：
+
 - ✅ 哨兵已阻止 Step 1（escape 到主仓库）
 - 可选：`git config core.hooksPath /dev/null`（禁用所有 hooks）
 - 可选：`git commit --no-verify`（跳过 hooks）
@@ -250,11 +266,13 @@ done
 ### A：对抗性验证（Adversarial）
 
 验证 P1 契约在真实 LLM agent 场景下的有效性：
+
 - Delegate 收到 exit 3 后是否立即停止
 - 是否会创造性重试或修改参数
 - 是否遵守硬停契约
 
 **关键测试**：
+
 - A1：对抗基线（自动化 + 手动验证）
 
 ---
@@ -262,12 +280,14 @@ done
 ### S：安全攻击（Security）
 
 验证哨兵对各种攻击的防御能力：
+
 - 符号链接攻击（文件/目录）
 - 路径遍历（相对/绝对路径）
 - $HOME 目录逃逸
 - Git hooks 注入
 
 **关键测试**：
+
 - S1-S2：符号链接
 - S3-S4：路径遍历
 - S5：Git hooks
@@ -277,11 +297,13 @@ done
 ### C：并发压力（Concurrency）
 
 验证多 worktree 并发执行的正确性：
+
 - 串行基线
 - 低/中/高并发
 - 混合并发（clean + escape）
 
 **关键测试**：
+
 - C1-C4：串行到高并发（10 worktree）
 - C5：混合并发
 
@@ -290,11 +312,13 @@ done
 ### R：异常处理（Resilience）
 
 验证系统对异常情况的健壮性：
+
 - Provider 崩溃（SEGFAULT）
 - 畸形输出（非 JSON）
 - Shell injection
 
 **关键测试**：
+
 - R1：Provider 崩溃
 - R3：畸形输出
 - R4：Shell injection
@@ -304,6 +328,7 @@ done
 ## 详细报告
 
 完整的测试结果和分析请参阅：
+
 - [Band D 规划](BAND_D_PLAN.md)
 - [P0 核心防御报告](BAND_D_P0_REPORT.md)
 - [P1 高价值场景报告](BAND_D_P1_REPORT.md)
@@ -340,6 +365,7 @@ done
 如果你想添加新的测试用例：
 
 1. **扩展 mock-provider**（如果需要新行为）：
+
    ```bash
    # 在 bin/mock-provider 中添加新的 case 分支
    case "$BEHAVIOR" in
@@ -351,6 +377,7 @@ done
    ```
 
 2. **创建测试脚本**：
+
    ```bash
    # 复制现有测试脚本作为模板
    cp tests/band-d/test-c1-c3-concurrency.sh tests/band-d/test-your-test.sh
@@ -358,6 +385,7 @@ done
    ```
 
 3. **运行测试并记录结果**：
+
    ```bash
    chmod +x tests/band-d/test-your-test.sh
    tests/band-d/test-your-test.sh

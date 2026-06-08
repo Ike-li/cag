@@ -9,6 +9,7 @@
 ## 执行摘要
 
 Band D P0 完成了 3 个高风险维度的核心验证：
+
 1. **符号链接攻击**（S1-S2）：✅ 哨兵成功拦截
 2. **并发压力**（C1-C3）：✅ 100% 成功率，无竞争问题
 3. **对抗基线**（A1）：✅ 哨兵正确触发（需手动验证 delegate 行为）
@@ -16,6 +17,7 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 ### 关键发现
 
 #### 🔴 发现 1：符号链接残留问题（已修复）
+
 - **问题**: 哨兵拦截符号链接攻击，但 worktree 中的符号链接未被清理
 - **影响**: 主仓库已恢复，但 worktree 有残留
 - **修复**: 在 cag-exec 清理逻辑中添加 `git clean -fd` 清理 worktree
@@ -30,11 +32,13 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 **场景**: Provider 在 worktree 创建指向主仓库文件的符号链接，然后写入
 
 **测试步骤**:
+
 1. 主仓库含 `target.txt`（内容 "original content"）
 2. Mock provider 在 worktree 创建 `ln -s ../../target.txt fake.txt`
 3. 写入 `echo "SYMLINK ATTACK" >> fake.txt`（实际写到主仓库）
 
 **结果**:
+
 - ✅ 哨兵触发: exit 3
 - ✅ 错误信息: `SANDBOX ESCAPE (cleaned up)`
 - ✅ 主仓库内容恢复: target.txt = "original content"
@@ -50,11 +54,13 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 **场景**: Provider 创建指向主仓库目录的符号链接，然后在其中写文件
 
 **测试步骤**:
+
 1. 主仓库含 `targetdir/file.txt`（内容 "original"）
 2. Mock provider 创建 `ln -s ../../targetdir fakedir`
 3. 写入 `echo "SYMLINK DIR ATTACK" >> fakedir/file.txt`
 
 **结果**:
+
 - ✅ 哨兵触发: exit 3
 - ✅ 主仓库内容恢复: targetdir/file.txt = "original"
 - ✅ 符号链接清理: fakedir 不存在
@@ -69,6 +75,7 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 **场景**: 5 个 worktree 顺序执行，验证基本并发能力
 
 **结果**:
+
 - ✅ 5/5 成功（100%）
 - ✅ 每个 worktree 分支有新 commit
 - ✅ git fsck 通过（仓库完整性）
@@ -82,6 +89,7 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 **场景**: 2 个 worktree 同时执行，验证低并发无竞争
 
 **结果**:
+
 - ✅ 2/2 成功（100%）
 - ✅ 每个 worktree 分支有新 commit
 - ✅ git fsck 通过
@@ -96,6 +104,7 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 **场景**: 5 个 worktree 同时执行，验证中并发的稳定性
 
 **结果**:
+
 - ✅ 5/5 成功（100%，超过 80% 目标）
 - ✅ 每个 worktree 分支有新 commit
 - ✅ git fsck 通过
@@ -110,11 +119,13 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 **场景**: 用真实 codex-delegate 执行 mock provider escape，验证 delegate 在 exit 3 后是否立即停止
 
 **自动化验证**:
+
 - ✅ 哨兵正确触发 exit 3
 - ✅ 错误信息: `SANDBOX ESCAPE (cleaned up)`
 - ✅ 主仓库无改动
 
 **手动验证**（待完成）:
+
 - ⚠️ 需要观察真实 delegate 行为：
   - Delegate 是否看到 exit 3 错误
   - Delegate 是否立即停止（不重试）
@@ -133,6 +144,7 @@ Band D P0 完成了 3 个高风险维度的核心验证：
 **根因**: P2 清理逻辑只清理主仓库，未清理 worktree
 
 **修复**:
+
 ```bash
 # 在 bin/cag-exec 哨兵清理中添加
 cd "$WORKTREE"
@@ -140,6 +152,7 @@ git clean -fd -e .git >/dev/null 2>&1 || true
 ```
 
 **影响**:
+
 - ✅ 符号链接被清理
 - ✅ 其他 untracked 文件也被清理
 - ✅ 不影响 .git 目录
@@ -164,11 +177,13 @@ git clean -fd -e .git >/dev/null 2>&1 || true
 ## 验收标准达成情况
 
 ### ✅ 必要条件（P0）
+
 - ✅ **S1-S2**: 符号链接攻击全拦截
 - ✅ **C1-C3**: 并发测试 100% 成功率（超过 ≥80% 目标）
 - ✅ **A1**: 哨兵正确触发（自动化部分）
 
 ### 评估
+
 **P0 核心目标已达成**，可以继续 P1（或先完成 A1 手动验证）
 
 ---
@@ -176,12 +191,14 @@ git clean -fd -e .git >/dev/null 2>&1 || true
 ## 测试工件
 
 ### 新增文件
+
 - `bin/mock-provider`: 扩展支持 symlink-file/symlink-dir
 - `tests/band-d/test-s1-s2-symlink-attacks.sh`: 符号链接攻击测试
 - `tests/band-d/test-c1-c3-concurrency.sh`: 并发压力测试
 - `tests/band-d/test-a1-adversarial-baseline.sh`: 对抗基线测试
 
 ### 修改文件
+
 - `bin/cag-exec`: P4 修复（worktree 清理）
 
 ---
@@ -189,11 +206,13 @@ git clean -fd -e .git >/dev/null 2>&1 || true
 ## 风险评估
 
 ### 已闭合的风险
+
 - ✅ **符号链接攻击**: 完全拦截 + 清理
 - ✅ **并发竞争**: 5 并发无问题，git worktree 机制成熟
 - ⚠️ **Delegate 契约**: 哨兵触发正确，LLM 行为待验证
 
 ### 剩余风险
+
 - 🟡 **Delegate 对抗行为**: 需手动验证 delegate 是否会"创造性"重试
 - 🟢 **高并发 (10+)**: C3 (5 并发) 通过，更高并发可选测试
 - 🟢 **路径遍历攻击**: P1 测试范围
@@ -203,16 +222,19 @@ git clean -fd -e .git >/dev/null 2>&1 || true
 ## 后续建议
 
 ### 选项 A: 完成 P0 手动验证
+
 **任务**: 手动执行 A1 对抗测试（用真实 delegate）  
 **工作量**: ~30min  
 **价值**: 完整验证 P1 契约在对抗场景下的有效性
 
 ### 选项 B: 继续 P1
+
 **任务**: A2-A3 + S3-S4 + C5 + R4（7 个用例）  
 **工作量**: ~2-3h  
 **价值**: 补全高价值场景（误导性错误、路径遍历、混合并发、shell injection）
 
 ### 选项 C: 提交 P0 成果
+
 **任务**: 记录到记忆、提交代码、生成报告  
 **工作量**: ~30min  
 **价值**: 阶段性成果固化
@@ -222,11 +244,13 @@ git clean -fd -e .git >/dev/null 2>&1 || true
 ## 总结
 
 Band D P0 **成功达成核心目标**：
+
 1. ✅ 符号链接攻击被完全拦截（发现并修复 P4）
 2. ✅ 并发测试 100% 成功率（超预期）
 3. ✅ 对抗基线哨兵正确触发（LLM 行为待手动验证）
 
 **关键成就**:
+
 - 发现并修复 P4（worktree 清理不完整）
 - 验证 git worktree 在中并发场景下的稳定性
 - 闭合了符号链接攻击路径

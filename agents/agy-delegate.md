@@ -34,6 +34,7 @@ Large-context edits, documentation, multi-file overviews, UI/UX/readability chan
 ## Workflow
 
 ### 1. Sanity check
+
 ```bash
 test -d "$WORKTREE/.git" -o -f "$WORKTREE/.git" || { echo "WORKTREE missing"; exit 2; }
 git -C "$WORKTREE" branch --show-current

@@ -3,6 +3,7 @@
 主 Claude 根据任务特征自动选择 provider、model 和 reasoning effort。
 
 **⚠️ 重要限制**：
+
 - **codex 仅支持 gpt-5.5**（ChatGPT 账号限制）
 - **传递 gpt-4o 或 o3 会快速失败**（cag-exec 预检查）
 - **建议：不传 MODEL 参数**，让 codex 使用默认 gpt-5.5
@@ -37,6 +38,7 @@
 | **gpt-4o** | 简单改动、快速原型 | 快 | 低 | ❌ ChatGPT 账号不支持 |
 
 **建议**：
+
 - 目前所有任务使用 gpt-5.5（不传 model 参数）
 - 通过 reasoning effort 控制复杂度（low/medium/high/xhigh）
 - 如需使用其他模型，需要升级到 OpenAI API 账号
@@ -55,6 +57,7 @@
 | **Gemini 3 Flash** | 轻量级快速任务 | 快 | 快速原型 |
 
 **注意**：
+
 - agy 不支持 reasoning-effort 参数
 - 通过选择不同模型控制质量和速度
 - 模型名称需要精确匹配（包括大小写和括号）
@@ -120,13 +123,15 @@
 **任务**：统一所有文件的缩进为 2 空格
 
 **决策**：
+
 - Provider: codex（代码格式化）
 - Model: （不指定，使用默认 gpt-5.5）
 - Reasoning: low（无需深度思考）
 
 **Agent prompt 包含**：
+
 ```
-MODEL: 
+MODEL:
 REASONING: low
 ```
 
@@ -137,13 +142,15 @@ REASONING: low
 **任务**：优化排序算法，降低时间复杂度
 
 **决策**：
+
 - Provider: codex（算法逻辑）
 - Model: （不指定，使用默认 gpt-5.5）
 - Reasoning: xhigh（需要深度分析）
 
 **Agent prompt 包含**：
+
 ```
-MODEL: 
+MODEL:
 REASONING: xhigh
 ```
 
@@ -154,14 +161,16 @@ REASONING: xhigh
 **任务**：为整个项目生成 API 文档
 
 **决策**：
+
 - Provider: agy（文档 + 大上下文）
 - Model: Gemini 3.1 Pro (Low)（大上下文）
 - Reasoning: （不支持）
 
 **Agent prompt 包含**：
+
 ```
 MODEL: Gemini 3.1 Pro (Low)
-REASONING: 
+REASONING:
 ```
 
 ---
@@ -171,13 +180,15 @@ REASONING:
 **任务**：修复登录页面的验证 bug
 
 **决策**：
+
 - Provider: codex（逻辑修复）
 - Model: （留空，用默认 gpt-5.5）
 - Reasoning: medium（标准调试）
 
 **Agent prompt 包含**：
+
 ```
-MODEL: 
+MODEL:
 REASONING: medium
 ```
 
@@ -194,7 +205,7 @@ Agent(
 TASK_ID: optimize-sort
 WORKTREE: /path/to/worktree
 ARTIFACT: /path/to/artifact.md
-MODEL: 
+MODEL:
 REASONING: xhigh
 SUBTASK:
 优化 src/sort.js 中的排序算法...
@@ -208,6 +219,7 @@ ACCEPTANCE:
 Delegate 会将 `MODEL` 和 `REASONING` 传递给 `cag-exec`。
 
 **注意**：
+
 - MODEL 留空时使用 provider 默认配置
 - codex 当前只支持 gpt-5.5，建议总是留空
 - agy 不支持 REASONING 参数

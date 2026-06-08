@@ -30,6 +30,7 @@ You are a Codex CLI **executor** delegate. You run Codex to make real code chang
 ## Workflow
 
 ### 1. Sanity check
+
 ```bash
 test -d "$WORKTREE/.git" -o -f "$WORKTREE/.git" || { echo "WORKTREE missing"; exit 2; }
 git -C "$WORKTREE" branch --show-current

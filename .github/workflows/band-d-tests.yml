@@ -1,0 +1,131 @@
+name: Band D Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'bin/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  band-d-tests:
+    name: Band D Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up test environment
+        run: |
+          # 确保脚本可执行
+          chmod +x bin/mock-provider
+          chmod +x bin/cag-exec
+          chmod +x tests/band-d/*.sh
+
+          # 配置 git（测试需要）
+          git config --global user.name "CI Bot"
+          git config --global user.email "ci@example.com"
+
+      - name: Run P0 Tests (Core Defense)
+        id: p0
+        continue-on-error: true
+        run: |
+          echo "::group::P0: S1-S2 Symlink Attacks"
+          tests/band-d/test-s1-s2-symlink-attacks.sh
+          echo "::endgroup::"
+
+          echo "::group::P0: C1-C3 Concurrency"
+          tests/band-d/test-c1-c3-concurrency.sh
+          echo "::endgroup::"
+
+          echo "::group::P0: A1 Adversarial Baseline"
+          tests/band-d/test-a1-adversarial-baseline.sh
+          echo "::endgroup::"
+
+      - name: Run P1 Tests (High-Value Scenarios)
+        id: p1
+        continue-on-error: true
+        run: |
+          echo "::group::P1: S3-S4 Path Traversal"
+          tests/band-d/test-s3-s4-path-traversal.sh
+          echo "::endgroup::"
+
+          echo "::group::P1: C5 Mixed Concurrency"
+          tests/band-d/test-c5-mixed-concurrency.sh
+          echo "::endgroup::"
+
+          echo "::group::P1: R4 Shell Injection"
+          tests/band-d/test-r4-shell-injection.sh
+          echo "::endgroup::"
+
+      - name: Run P2 Tests (Edge Cases)
+        id: p2
+        continue-on-error: true
+        run: |
+          echo "::group::P2: R1-R3 Provider Errors"
+          tests/band-d/test-r1-r3-provider-errors.sh
+          echo "::endgroup::"
+
+          echo "::group::P2: C4 High Concurrency"
+          tests/band-d/test-c4-high-concurrency.sh
+          echo "::endgroup::"
+
+          echo "::group::P2: S5 Git Hooks"
+          tests/band-d/test-s5-git-hooks.sh
+          echo "::endgroup::"
+
+      - name: Generate Test Summary
+        if: always()
+        run: |
+          echo "# Band D Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # P0 status
+          if [ "${{ steps.p0.outcome }}" == "success" ]; then
+            echo "| P0 Core Defense | ✅ Pass |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| P0 Core Defense | ❌ Fail |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # P1 status
+          if [ "${{ steps.p1.outcome }}" == "success" ]; then
+            echo "| P1 High-Value | ✅ Pass |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| P1 High-Value | ⚠️ Known Issues |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # P2 status
+          if [ "${{ steps.p2.outcome }}" == "success" ]; then
+            echo "| P2 Edge Cases | ✅ Pass |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| P2 Edge Cases | ❌ Fail |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See [TESTING.md](./TESTING.md) for detailed test documentation." >> $GITHUB_STEP_SUMMARY
+
+      - name: Check overall status
+        if: always()
+        run: |
+          # P0 必须通过
+          if [ "${{ steps.p0.outcome }}" != "success" ]; then
+            echo "❌ P0 Core Defense tests failed"
+            exit 1
+          fi
+
+          # P1 允许部分失败（已知限制）
+          # P2 必须通过
+          if [ "${{ steps.p2.outcome }}" != "success" ]; then
+            echo "❌ P2 Edge Cases tests failed"
+            exit 1
+          fi
+
+          echo "✅ All critical tests passed"

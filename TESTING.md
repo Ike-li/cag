@@ -125,6 +125,17 @@
 
 ## 如何运行测试
 
+### CI/CD 自动化
+
+**GitHub Actions 自动运行**：
+- Push 到 `main` 或 `develop` 分支时
+- 创建 Pull Request 到 `main` 时
+- 手动触发（GitHub Actions 页面）
+
+详见 [CI 配置文档](../.github/CI.md)
+
+---
+
 ### 前置条件
 
 ```bash

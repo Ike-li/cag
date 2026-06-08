@@ -59,28 +59,33 @@ CAG v2.1 已部署，软链接指向本仓库，codex/agy provider 均可用。
 
 ### Band D：对抗性与安全测试
 
-详见 [TESTING.md](TESTING.md)。
+详见 [TESTING.md](TESTING.md) | [CI 配置](.github/CI.md)
 
-**测试覆盖**：
+**测试覆盖**:
 - 对抗性验证：P1 契约在真实 LLM delegate 场景下的可靠性
 - 安全攻击：符号链接、路径遍历、shell injection、git hooks
 - 并发压力：串行到高并发（10 worktree）
 - 异常处理：Provider 崩溃、畸形输出
 
-**测试结果**：
+**测试结果**:
 - P0 核心防御：6/6 通过（100%）
 - P1 高价值场景：3/5 通过 + 2 已知限制（60%）
 - P2 边缘场景：4/4 通过（100%）
 - **总计**：13/15 通过（87%），2 个已知限制
 
-**关键发现**：
+**关键发现**:
 - ✅ 符号链接攻击完全拦截（+ P4 修复）
 - ✅ P1 契约在真实 LLM 场景下可靠
 - ✅ 高并发 100% 成功（10 worktree）
 - ⚠️ 哨兵边界清晰（只保护 git 仓库，外部路径需 provider 沙箱）
 - ⚠️ 混合并发假阳性（时序竞争，P5 部分修复）
 
-**运行测试**：
+**CI/CD**:
+- GitHub Actions 自动运行所有 Band D 测试
+- Push 到 main/develop 或 PR 时触发
+- 详见 [CI 配置文档](.github/CI.md)
+
+**运行测试**:
 ```bash
 # 运行所有 Band D 测试
 for test in tests/band-d/test-*.sh; do "$test"; done
